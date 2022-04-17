@@ -12,46 +12,70 @@ public typealias DKImageRequestID = Int32
 public let DKImageInvalidRequestID: DKImageRequestID = 0
 
 public func getImageDataManager() -> DKImageDataManager {
-	return DKImageDataManager.sharedInstance
+    return DKImageDataManager.sharedInstance
 }
 
 public class DKImageDataManager {
-	
-	public class func checkPhotoPermission(_ handler: @escaping (_ granted: Bool) -> Void) {
-		func hasPhotoPermission() -> Bool {
-			return PHPhotoLibrary.authorizationStatus() == .authorized
-		}
-		
-		func needsToRequestPhotoPermission() -> Bool {
-			return PHPhotoLibrary.authorizationStatus() == .notDetermined
-		}
-		
-		hasPhotoPermission() ? handler(true) : (needsToRequestPhotoPermission() ?
-			PHPhotoLibrary.requestAuthorization({ status in
-				DispatchQueue.main.async(execute: { () in
-					hasPhotoPermission() ? handler(true) : handler(false)
-				})
-			}) : handler(false))
-	}
-	
-	static let sharedInstance = DKImageDataManager()
-	
+    
+    public class func checkPhotoPermission(_ handler: @escaping (_ granted: PHAuthorizationStatus) -> Void) {
+        func hasPhotoPermission() -> Bool {
+            return PHPhotoLibrary.authorizationStatus() == .authorized
+        }
+        
+        func needsToRequestPhotoPermission() -> Bool {
+            let determined = PHPhotoLibrary.authorizationStatus() == .notDetermined
+            if determined {
+                getImageDataManager().checkRequestAuthorization = true
+            }
+            return determined
+        }
+        // handler(PHPhotoLibrary.authorizationStatus())
+        if PHPhotoLibrary.authorizationStatus() == .notDetermined {
+            getImageDataManager().checkRequestAuthorization = true
+        }
+        if #available(iOS 14, *) {
+            let rrr = PHPhotoLibrary.authorizationStatus()
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { (status) in
+                DispatchQueue.main.async {
+                    handler(status)
+                }
+            }
+        } else {
+            PHPhotoLibrary.requestAuthorization({ status in
+                DispatchQueue.main.async {
+                    handler(status)
+                }
+            })
+        }
+        
+        //        hasPhotoPermission() ? handler(true) : (needsToRequestPhotoPermission() ?
+        //            PHPhotoLibrary.requestAuthorization({ status in
+        //                DispatchQueue.main.async(execute: { () in
+        //                    hasPhotoPermission() ? handler(true) : handler(false)
+        //                })
+        //            }) : handler(false))
+    }
+    
+    static let sharedInstance = DKImageDataManager()
+    
+    public var checkRequestAuthorization = false
+    
     private let manager = PHCachingImageManager()
-	
-	private lazy var imageRequestOptions: PHImageRequestOptions = {
-		let options = PHImageRequestOptions()
+    
+    private lazy var imageRequestOptions: PHImageRequestOptions = {
+        let options = PHImageRequestOptions()
         options.isNetworkAccessAllowed = true
-		
-		return options
-	}()
-	
-	private lazy var videoRequestOptions: PHVideoRequestOptions = {
-		let options = PHVideoRequestOptions()
-		options.deliveryMode = .mediumQualityFormat
+        
+        return options
+    }()
+    
+    private lazy var videoRequestOptions: PHVideoRequestOptions = {
+        let options = PHVideoRequestOptions()
+        options.deliveryMode = .mediumQualityFormat
         options.isNetworkAccessAllowed = true
-		
-		return options
-	}()
+        
+        return options
+    }()
     
     @discardableResult
     public func fetchImage(for asset: DKAsset,
@@ -188,7 +212,7 @@ public class DKImageDataManager {
         self.update(requestID: requestID, with: imageRequestID, old: oldRequestID)
         return requestID
     }
-	
+    
     @discardableResult
     public func fetchAVAsset(for asset: DKAsset, options: PHVideoRequestOptions? = nil, completeBlock: @escaping (_ avAsset: AVAsset?, _ info: [AnyHashable: Any]?) -> Void) -> DKImageRequestID {
         return self.fetchAVAsset(for: asset, options: options, oldRequestID: nil, completeBlock: completeBlock)
@@ -347,3 +371,4 @@ public class DKImageDataManager {
         }
     }
 }
+

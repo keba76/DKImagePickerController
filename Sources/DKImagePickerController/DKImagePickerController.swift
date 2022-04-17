@@ -52,7 +52,21 @@ internal protocol DKImagePickerControllerObserver {
 ////////////////////////////////////////////////////////////////////////
 
 @objc
-open class DKUINavigationController: UINavigationController {}
+open class DKUINavigationController: UINavigationController {
+    
+    open override func viewDidLoad() {
+        super.viewDidLoad()
+        if #available(iOS 15.0, *) {
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            // appearance.backgroundColor = ThemeManager.shared.currentTheme.color(type: .cover)
+            self.navigationBar.standardAppearance = appearance;
+            self.navigationBar.scrollEdgeAppearance = self.navigationBar.standardAppearance
+        }
+        
+    }
+    
+}
 
 @objc
 open class DKImagePickerController: DKUINavigationController, DKImageBaseManagerObserver, UIAdaptivePresentationControllerDelegate {

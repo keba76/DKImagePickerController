@@ -9,6 +9,7 @@
 import UIKit
 import AVFoundation
 import Photos
+import PhotosUI
 
 private extension UICollectionView {
 
@@ -63,28 +64,28 @@ open class DKAssetGroupDetailVC: UIViewController,
 
         imagePickerController.add(observer: self)
 
-		let layout = imagePickerController.UIDelegate.layoutForImagePickerController(imagePickerController).init()
-		let collectionView = UICollectionView(frame: CGRect.zero, collectionViewLayout: layout)
+        let layout = imagePickerController.UIDelegate.layoutForImagePickerController(imagePickerController).init()
+        let collectionView = UICollectionView(frame: CGRect.zero, collectionViewLayout: layout)
         collectionView.backgroundColor = imagePickerController.UIDelegate.imagePickerControllerCollectionViewBackgroundColor()
         collectionView.allowsMultipleSelection = true
-		collectionView.delegate = self
-		collectionView.dataSource = self
-		view.addSubview(collectionView)
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        view.addSubview(collectionView)
 
         self.collectionView = collectionView
 
-		footerView = imagePickerController.UIDelegate.imagePickerControllerFooterView(imagePickerController)
-		if let footerView = footerView {
-			view.addSubview(footerView)
-		}
+        footerView = imagePickerController.UIDelegate.imagePickerControllerFooterView(imagePickerController)
+        if let footerView = footerView {
+            view.addSubview(footerView)
+        }
 
         headerView = imagePickerController.UIDelegate.imagePickerControllerHeaderView(imagePickerController)
         if let headerView = headerView {
             view.addSubview(headerView)
         }
 
-		hidesCamera = imagePickerController.sourceType == .photo
-		checkPhotoPermission()
+        hidesCamera = imagePickerController.sourceType == .photo
+        checkPhotoPermission()
 
         if imagePickerController.allowSwipeToSelect && !imagePickerController.singleSelect {
             let swipeOutGesture: UIPanGestureRecognizer = UIPanGestureRecognizer(target: self, action: #selector(self.swiping(gesture:)))
@@ -112,8 +113,8 @@ open class DKAssetGroupDetailVC: UIViewController,
         self.collectionView?.collectionViewLayout.invalidateLayout()
     }
 
-	override open func viewDidLayoutSubviews() {
-		super.viewDidLayoutSubviews()
+    override open func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
 
         self.configureAccessoryViews()
     }
@@ -126,6 +127,7 @@ open class DKAssetGroupDetailVC: UIViewController,
             return
         }
 
+
         imagePickerController.groupDataManager.add(observer: self)
         let groupListVC = DKAssetGroupListVC(imagePickerController: imagePickerController,
                                               defaultAssetGroup: imagePickerController.defaultAssetGroup,
@@ -135,8 +137,14 @@ open class DKAssetGroupDetailVC: UIViewController,
         groupListVC.showsEmptyAlbums = imagePickerController.showsEmptyAlbums
         groupListVC.loadGroups()
         self.groupListVC = groupListVC
-        
+        let transition = CATransition()
+        transition.type = CATransitionType.fade
+        transition.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
+        transition.duration = 0.2
+        self.collectionView?.layer.add(transition, forKey: "UICollectionViewReloadDataAnimationKey")
         self.collectionView?.reloadData()
+        
+
     }
 
     func configureAccessoryViews() {
@@ -179,7 +187,7 @@ open class DKAssetGroupDetailVC: UIViewController,
     }
 
     func checkPhotoPermission() {
-		func photoDenied() {
+        func photoDenied() {
             guard let imagePickerController = imagePickerController else {
                 assertionFailure("Expect imagePickerController")
                 return
@@ -187,13 +195,96 @@ open class DKAssetGroupDetailVC: UIViewController,
             let permissionColors = imagePickerController.permissionViewColors
             self.view.addSubview(DKPermissionView.permissionView(.photo, withColors: permissionColors))
             self.view.backgroundColor = permissionColors.backgroundColor
-			self.collectionView?.isHidden = true
-		}
+            self.collectionView?.isHidden = true
+        }
 
-		DKImageDataManager.checkPhotoPermission { granted in
-			granted ? self.reload() : photoDenied()
-		}
-	}
+        DKImageDataManager.checkPhotoPermission { granted in
+            switch granted {
+                    case .authorized:
+                self.reload()
+
+                    case .limited:
+                if #available(iOS 14, *) {
+                    self.navigationItem.rightBarButtonItems?.append(UIBarButtonItem(title: self.localizeInBundle(localize: "Manage"), style: .plain, target: self, action: #selector(self.manage)))
+                    self.reload()
+                
+                    
+                } else {
+                self.reload()
+                }
+                    case .restricted:
+                photoDenied()
+
+                    case .denied:
+                photoDenied()
+
+                    case .notDetermined:
+                photoDenied()
+
+                    @unknown default:
+                photoDenied()
+                    }
+            //granted ? self.reload() : photoDenied()
+        }
+    }
+                                                          
+                                                          
+    @available(iOS 14, *)
+    @objc private func manage() {
+        
+        let actionSheet = UIAlertController(title: "",
+                                            message: self.localizeInBundle(localize: "SelectMorePhotos"),
+                                                    preferredStyle: .actionSheet)
+                
+        let selectPhotosAction = UIAlertAction(title: self.localizeInBundle(localize: "SelectMore"),
+                                                       style: .default) { [unowned self] (_) in
+                    // Show limited library picker
+                  //  DispatchQueue.main.async {
+                        PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: self)
+                      //  self.reload()
+                 //   }
+                    
+                }
+                actionSheet.addAction(selectPhotosAction)
+                
+        let allowFullAccessAction = UIAlertAction(title: self.localizeInBundle(localize: "AllowAccess"),
+                                                          style: .default) { [unowned self] (_) in
+                    // Open app privacy settings
+                //    DispatchQueue.main.async {
+                        gotoAppPrivacySettings()
+                 //   }
+
+                }
+                actionSheet.addAction(allowFullAccessAction)
+                
+        let cancelAction = UIAlertAction(title: self.localizeInBundle(localize: "Cancel"), style: .cancel, handler: nil)
+                actionSheet.addAction(cancelAction)
+            
+                self.present(actionSheet, animated: true, completion: nil)
+        
+    }
+    
+    private func localizeInBundle(localize: String) -> String {
+//        let bundle = Bundle(for: type(of: self))
+//        guard let path = bundle.path(forResource: "HelpUs", ofType: "bundle"), let finalBundle = Bundle(path: path) else { return "" }
+        
+        return Bundle.main.localizedString(forKey: localize, value: nil, table: nil)
+        
+    }
+    
+    func gotoAppPrivacySettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString),
+            UIApplication.shared.canOpenURL(url) else {
+                assertionFailure("Not able to open App privacy settings")
+                return
+        }
+
+        if #available(iOS 10.0, *) {
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        } else {
+            return
+        }
+    }
 
     func selectAssetGroup(_ groupId: String?) {
         if self.selectedGroupId == groupId {
@@ -203,10 +294,15 @@ open class DKAssetGroupDetailVC: UIViewController,
 
         self.selectedGroupId = groupId
         self.updateTitleView()
+        let transition = CATransition()
+        transition.type = CATransitionType.fade
+        transition.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
+        transition.duration = 0.2
+        self.collectionView?.layer.add(transition, forKey: "UICollectionViewReloadDataAnimationKey")
         self.collectionView?.reloadData()
     }
 
-	open func updateTitleView() {
+    open func updateTitleView() {
         guard let selectedGroupId = self.selectedGroupId else { return }
         guard let imagePickerController = imagePickerController else {
             assertionFailure("Expect imagePickerController")
@@ -223,7 +319,7 @@ open class DKAssetGroupDetailVC: UIViewController,
         self.selectGroupButton = selectGroupButton
 
         self.navigationItem.titleView = selectGroupButton
-	}
+    }
 
     @objc func showGroupSelector() {
         guard let groupListVC = groupListVC else {
@@ -577,21 +673,18 @@ open class DKAssetGroupDetailVC: UIViewController,
                 cell.thumbnailImage = image
             }
         }
-
-        if let imagePickerController = imagePickerController,
-            imagePickerController.UIDelegate.needsToShowPreviewOnLongPress() {
-
-            cell.longPressBlock = { [weak self, weak cell] in
-                guard let strongSelf = self, let strongCell = cell else { return }
-                strongSelf.showGallery(from: strongCell)
-            }
+        
+        cell.longPressBlock = { [weak self, weak cell] in
+            guard let strongSelf = self, let strongCell = cell else { return }
+            
+            strongSelf.showGallery(from: strongCell)
         }
     }
 
     // MARK: - UICollectionViewDelegate, UICollectionViewDataSource methods
 
     public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-		guard let selectedGroupId = self.selectedGroupId else { return self.hidesCamera ? 0 : 1 }
+        guard let selectedGroupId = self.selectedGroupId else { return self.hidesCamera ? 0 : 1 }
 
         guard let group = self.imagePickerController?.groupDataManager.fetchGroup(with: selectedGroupId) else {
             assertionFailure("Expect group")
@@ -626,12 +719,6 @@ open class DKAssetGroupDetailVC: UIViewController,
             assetCell.isSelected = false
             self.collectionView?.deselectItem(at: indexPath, animated: false)
         }
-    }
-
-    public func collectionView(_ collectionView: UICollectionView, didEndDisplaying cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        let assetCell: DKAssetGroupDetailBaseCell? = cell as? DKAssetGroupDetailBaseCell
-
-        assetCell?.asset?.cancelRequests()
     }
 
     public func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
@@ -806,15 +893,17 @@ open class DKAssetGroupDetailVC: UIViewController,
         }
     }
 
-	// MARK: - DKImageGroupDataManagerObserver
+    // MARK: - DKImageGroupDataManagerObserver
 
-	func groupDidUpdate(groupId: String) {
-		if self.selectedGroupId == groupId {
-			self.updateTitleView()
-		}
-	}
+    func groupDidUpdate(groupId: String) {
+        if self.selectedGroupId == groupId {
+            self.updateTitleView()
+        } else if let collection = self.collectionView, collection.numberOfItems(inSection: 0) == 0 {
+            self.updateTitleView()
+        }
+    }
 
-	func group(groupId: String, didRemoveAssets assets: [DKAsset]) {
+    func group(groupId: String, didRemoveAssets assets: [DKAsset]) {
         guard let imagePickerController = self.imagePickerController else {
             assertionFailure("Expect imagePickerController")
             return
@@ -825,12 +914,15 @@ open class DKAssetGroupDetailVC: UIViewController,
                 imagePickerController.removeSelection(asset: removedAsset)
             }
         }
-	}
+    }
 
     func groupDidUpdateComplete(groupId: String) {
         if self.selectedGroupId == groupId {
             self.resetCachedAssets()
             self.collectionView?.reloadData()
-        }
+        } else if let collection = self.collectionView, collection.numberOfItems(inSection: 0) == 0 {
+            self.reload()
+           }
     }
 }
+

@@ -14,6 +14,10 @@ public enum DKImagePickerGroupListPresentationStyle: Int {
     case presented
 }
 
+public protocol PodNavBarColorProvider {
+    func getNavBarColor() -> UIColor
+}
+
 @objc
 public protocol DKImagePickerControllerUIDelegate {
 
@@ -103,12 +107,17 @@ open class DKImagePickerControllerBaseUIDelegate: NSObject, DKImagePickerControl
 
     open func createDoneButtonIfNeeded() -> UIButton {
         if self.doneButton == nil {
+            
             let button = UIButton(type: UIButton.ButtonType.custom)
-            button.setTitleColor(UINavigationBar.appearance().tintColor ?? self.imagePickerController.navigationBar.tintColor, for: .normal)
+            var colorBarItem = UINavigationBar.appearance().tintColor ?? self.imagePickerController.navigationBar.tintColor
+            if let delegate = UIApplication.shared.delegate as? PodNavBarColorProvider {
+                colorBarItem = delegate.getNavBarColor()
+            }
+            button.setTitleColor(colorBarItem, for: .normal)
             self.updateDoneButtonTitle(button)
             self.doneButton = button
         }
-
+        
         return self.doneButton!
     }
 
